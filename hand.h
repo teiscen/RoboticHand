@@ -1,12 +1,16 @@
 #include <sstream>
 #include <unordered_map>
 #include <vector>
-//TODO  - Ask if i can moving servos is blocking or non blocking
-//      - make the naming convention _ instead of camelcase or standardize the enums naming
+//TODO
+//      - delay is already defined so need to take that out
+//      - map servos to hand joints
+//      - Software documentations
+//          -As if someone welse is going ot use it to build something
 
 /**
     Send Commands to the hand structured as the following:
     FingerID (to identify which finger this applies to)
+    int
     Command Type (Two that pop into mind are:
         movement:   Moves the finger a certain amount stopping if it reaches "limit"
         position:   Figures out how to get the finger to the specified position
@@ -14,8 +18,7 @@
     )
     Values
     TODO: 
-    - Will i be passing in a c array of commands or vectors 
-    - No General delay ie get to a posn and wait for other to also get there
+    Decide whether its better to have a virtual class with it or not
 */
 enum FingerEnum{
     THUMB, 
@@ -24,6 +27,10 @@ enum FingerEnum{
     RING, 
     LITTLE,
 };
+enum JointEnum{
+    TOP,
+    BOT
+}
 enum CommandEnum{
     MOVEMENT,
     POSITION, 
@@ -31,18 +38,20 @@ enum CommandEnum{
 };
 struct Command {
     FingerEnum fingerEnum;
+    JointEnum joint;
     CommandEnum commandEnum;
     void *args; 
-
-
 };
 
 
-// To keep track of the servo position
-//TODO: 
-// - find out when it resets to reduce how much data is being stored.
-// - will need to be adapted to fit 
-// can set it up so overflowCounter just
+/**
+    This keeps track of the servos positions.
+    It is responsible for ensuring the fingers dont exceeed their limits.
+    
+    TODO:  
+        Actually come up with a way to track the joints positions. 
+        Current Impl: 
+*/
 struct ServoPosn {
     uint score            = 0;
     short overflowCounter = 0;
@@ -69,47 +78,49 @@ struct ServoPosn {
         std::stringstream ss;
         return ss << "OverFlow: " << this.overflowCounter << " Score: " << this.score << "\n";
     }
-}
+};
+
+
+class Joint{
+public:
+    void update(Command cmd){
+        switch(cmd.CommandEnum){
+            // Once its decided how to implement movement and position it needs to casted to the proper
+            case CommandEnum::MOVEMENT: movement(cmd.args);     break;
+            case CommandEnum::POSITION: position(cmd.args);     break;
+            case CommandEnum::DELAY:    delay(*(int*)cmd.args); break;
+            default: break;
+        }
+    }
+
+private:
+    void movement(void *args){
+
+        delay(100);
+    }
+    void position(void *args){
+        
+        delay(100);
+    }
+    ServoPosn servoPosn;
+};
 
 // Finger
 class Finger{
 public:
-
-    // TODO: Honestly might be an easier and mor elegant way of handling this
-    // And decide whether or not to cast before sending to the appropriate functions
-    void update(CommandEnum commandEnum, void *args){
-        // Might need to add in this. in front of commands
-        switch(commandEnum){
-            case MOVEMENT:
-                movement(args);
-                break;
-            case POSITION:
-                position(args);
-                break;
-            case DELAY:
-                delay(args);
-                break;
-            default:
-                break;
+    void update(Command cmd){
+        switch(cmd.joint){
+            case JointEnum::TOP: topJoint.update(cmd); break;
+            case JointEnum::TOP: botJoint.update(cmd); break;
+            default: break;
         }
-    }
-    
-    void movement(void *args){
-
-    }
-
-    void position(void *args){
-
-    }
-
-    void delay(void *args){
-
     }
     
 private:
     // Some sort of state representation
-    ServoPosn servoPosn;
     // Restrictions would go here? Maybe they influence how servoPosn works
+    Joint topJoint;
+    Joint botJoint;
 };
 
 // Hand
@@ -133,9 +144,13 @@ public:
         std::for_each(commands.begin(), commands.end(), [this](const Command& cmd){
             auto it = fingers->find(cmd.fingerEnum)            
             if(it != fingers.end()){
-                it->second.update(cmd.commandEnum, cmd.args);
+                it->second.update(cmd);
             }
         });
+    }
+
+    std::string toString(){
+
     }
 
 private:
