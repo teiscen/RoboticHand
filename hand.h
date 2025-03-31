@@ -1,16 +1,34 @@
+#pragma once
+
 #include <sstream>
 #include <unordered_map>
 #include <vector>
+#include <utility>
+
+#include <Wire.h>
+#include <Adafruit_PWMServoDriver.h>
+
+#define STOP 300   // Neutral position (stops the servo)
+#define MAX_SPEED 500  // Maximum speed 
+// 400 slower forward
+#define MIN_SPEED 100  // Maximum speed backward
+// 200 slower backwards
+
+
 //TODO
-//      - delay is already defined so need to take that out
-//      - map servos to hand joints
-//      - Software documentations
-//          -As if someone welse is going ot use it to build something
+// - Come up with a way to identify servo positions
+//  - Come up with guards to stop damage, including thumb blocking the index
+// - Consider addition speed to the transitions for position movements (currently opearates at max speed)
+// - Enable repeat motions
+// - Find a more elegant way to avoid having pwm set up twice
+// - Figure out the best way to go about casting
+// - Software documentations
+//  - As if someone welse is going ot use it to build something
 
 /**
     Send Commands to the hand structured as the following:
-    FingerID (to identify which finger this applies to)
-    int
+    FingerID 
+    Joint num (to identify top or lower servo)
     Command Type (Two that pop into mind are:
         movement:   Moves the finger a certain amount stopping if it reaches "limit"
         position:   Figures out how to get the finger to the specified position
@@ -30,17 +48,20 @@ enum FingerEnum{
 enum JointEnum{
     TOP,
     BOT
-}
+};
 enum CommandEnum{
     MOVEMENT,
     POSITION, 
     DELAY
 };
 struct Command {
-    FingerEnum fingerEnum;
+    FingerEnum finger;
     JointEnum joint;
-    CommandEnum commandEnum;
+    CommandEnum command;
     void *args; 
+
+    Command(FingerEnum fEnum, JointEnum jEnum, CommandEnum cEnum, void* args) :
+        finger(fEnum), joint(jEnum), command(commandEnum), args(args) {}
 };
 
 
@@ -93,6 +114,11 @@ public:
         }
     }
 
+    Joint(uint servoNum) : servoNum(servoNum) {
+        pwm.begin();
+        pwm.setPWMFreq(50); // Set frequency to 50Hz
+    }
+
 private:
     void movement(void *args){
 
@@ -102,13 +128,19 @@ private:
         
         delay(100);
     }
+
+
     ServoPosn servoPosn;
+    uint servoNum;
+    Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40); // Default I2C address
 };
 
 // Finger
 class Finger{
 public:
+    Finger(uint top, uint bot) : topJoint(top), botJoint(bot) {}
     void update(Command cmd){
+
         switch(cmd.joint){
             case JointEnum::TOP: topJoint.update(cmd); break;
             case JointEnum::TOP: botJoint.update(cmd); break;
@@ -129,11 +161,11 @@ public:
     // Ik i can initialize  without this so ill fix this later.
     Hand(){
         this.fingers = new std::unordered_map<std::string, Finger>({
-            {THUMB,  Finger()},
-            {INDEX,  Finger()},
-            {MIDDLE, Finger()},
-            {RING,   Finger()},
-            {LITTLE, Finger()}
+            {THUMB,  Finger(0, 1)},
+            {INDEX,  Finger(2, 3)},
+            {MIDDLE, Finger(4, 5)},
+            {RING,   Finger(6, 7)},
+            {LITTLE, Finger(7, 9)}
         });
     }
 
